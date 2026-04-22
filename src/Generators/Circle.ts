@@ -52,6 +52,7 @@ export class Circle implements GeneratorInterface2D, ControlAwareInterface {
 	private widthControl: Control<HTMLInputElement>;
 	private heightControl: Control<HTMLInputElement>;
 	private forceCircleControl: Control<HTMLInputElement>;
+	private maxBlocksControl: Control<HTMLInputElement>;
 
 	constructor(
 		private width: number,
@@ -108,6 +109,55 @@ export class Circle implements GeneratorInterface2D, ControlAwareInterface {
 		});
 
 		this.forceCircleControl.element.checked = this.force;
+
+		this.maxBlocksControl = makeInputControl('Shape', 'max blocks', 'number', '', (val) => {
+			const maxBlocks = parseInt(val, 10);
+			if (isNaN(maxBlocks) || maxBlocks < 1) return;
+
+			const size = Circle.findLargestForMaxBlocks(maxBlocks, this.mode);
+			if (size < 1) return;
+
+			this.width = size;
+			this.height = size;
+			this.widthControl.element.value = `${size}`;
+			this.heightControl.element.value = `${size}`;
+
+			this.triggerChange('maxBlocks');
+		}, { min: '1' });
+	}
+
+	private static countBlocks(size: number, mode: CircleModes): number {
+		const radius = size / 2;
+		let count = 0;
+		for (let yi = 0; yi < size; yi++) {
+			for (let xi = 0; xi < size; xi++) {
+				const x = -.5 * (size - 2 * (xi + .5));
+				const y = -.5 * (size - 2 * (yi + .5));
+				let isFilled: boolean;
+				switch (mode) {
+					case CircleModes.thick:  isFilled = fatfilled(x, y, radius, 1); break;
+					case CircleModes.thin:   isFilled = thinfilled(x, y, radius, 1); break;
+					case CircleModes.filled: isFilled = filled(x, y, radius, 1); break;
+					default: throw new NeverError(mode);
+				}
+				if (isFilled) count++;
+			}
+		}
+		return count;
+	}
+
+	private static findLargestForMaxBlocks(maxBlocks: number, mode: CircleModes): number {
+		let low = 1, high = 500, result = 0;
+		while (low <= high) {
+			const mid = Math.floor((low + high) / 2);
+			if (Circle.countBlocks(mid, mode) <= maxBlocks) {
+				result = mid;
+				low = mid + 1;
+			} else {
+				high = mid - 1;
+			}
+		}
+		return result;
 	}
 
 	private triggerChange(event: string): void {
@@ -125,6 +175,7 @@ export class Circle implements GeneratorInterface2D, ControlAwareInterface {
 	public getControls(): Control[] {
 		return [
 			this.forceCircleControl,
+			this.maxBlocksControl,
 			this.widthControl,
 			this.heightControl,
 			{ element: this.circleModeControlElm, label: 'border', group: 'Render' },
