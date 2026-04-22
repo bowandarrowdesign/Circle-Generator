@@ -97,9 +97,9 @@ export class SvgRenderer implements RendererInterface, ControlAwareInterface {
 		let extra = "";
 		if (filled) {
 			if (x == midx || y == midy) {
-				color = '#880000';
+				color = '#3294A2';
 			} else {
-				color = '#FF0000';
+				color = '#62BBC8';
 			}
 
 			extra = `onclick="this.classList.toggle('built');"`;
@@ -206,7 +206,7 @@ export class SvgRenderer implements RendererInterface, ControlAwareInterface {
 		let svg = '';
 		for (let i = 0; i <= count; i++) {
 			const atCenter = i === center;
-			const fill = atCenter ? '#880000' : '#bbbbbb';
+			const fill = atCenter ? '#3294A2' : '#bbbbbb';
 			const opacity = atCenter ? '1' : '.3';
 			if (vertical) {
 				svg += `<rect x="${i * this.dFull + offset}" y="0" fill="${fill}"
