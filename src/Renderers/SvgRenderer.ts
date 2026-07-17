@@ -1,9 +1,8 @@
 import { GeneratorInterface2D } from "../Generators/GeneratorInterface2D";
 import { RendererInterface } from "./RendererInterface";
-import { Control, ControlAwareInterface, InfoControl, makeButtonControl, makeInputControl } from "../Controller";
+import { Control, ControlAwareInterface, InfoControl, makeInputControl } from "../Controller";
 import { EventEmitter } from "../EventEmitter";
 import { xor } from "../Math";
-import { svgToCanvas } from "../Utils";
 
 function isSvgElement(el: Node): el is SVGElement {
 	return (el as SVGElement).namespaceURI === "http://www.w3.org/2000/svg";
@@ -19,10 +18,10 @@ export class SvgRenderer implements RendererInterface, ControlAwareInterface {
 	private dBorder = 1;
 	private dFull = this.dWidth + this.dBorder;
 
-	private blocks = new InfoControl("Details", "blocks");
+	private blocks = new InfoControl("Details", "Blocks used:");
 
-	private stacksOf64 = new InfoControl("Details", "stacks of 64");
-	private stacksOf16 = new InfoControl("Details", "stacks of 16");
+	private stacksOf64 = new InfoControl("Details", "Stacks of 64:");
+	private stacksOf16 = new InfoControl("Details", "Stacks of 16:");
 
 	public readonly changeEmitter = new EventEmitter<SvgRendererState>();
 
@@ -45,33 +44,6 @@ export class SvgRenderer implements RendererInterface, ControlAwareInterface {
 
 		return [
 			scale,
-
-			makeButtonControl('Download', null, 'PNG', async () => {
-				if (!this.lastSvg) {
-					throw new Error('No SVG to download');
-				}
-
-				const canvas = await svgToCanvas(this.lastSvg.outerHTML);
-				const dataUrl = canvas.toDataURL();
-
-				const a = document.createElement('a');
-				a.href = dataUrl;
-				a.download = (this.lastGenerator?.getDescription() || "circle") + "-download.png";
-				document.body.appendChild(a);
-				a.click();
-			}),
-
-			makeButtonControl('Download', null, 'SVG', async () => {
-				if (!this.lastSvg) {
-					throw new Error('No SVG to download');
-				}
-
-				const a = document.createElement('a');
-				a.href = "data:image/svg+xml;base64," + btoa(this.lastSvg.outerHTML);
-				a.download = (this.lastGenerator?.getDescription() || "circle") + "-download.svg";
-				document.body.appendChild(a);
-				a.click();
-			}),
 
 			this.blocks,
 			this.stacksOf64,
@@ -136,10 +108,7 @@ export class SvgRenderer implements RendererInterface, ControlAwareInterface {
 		this.scale();
 	}
 
-	private lastGenerator: GeneratorInterface2D | null = null;
-
 	private generateSVG(generator: GeneratorInterface2D): string {
-		this.lastGenerator = generator;
 		const { minX, maxX, minY, maxY } = generator.getBounds();
 		const width = maxX - minX;
 		const height = maxY - minY;

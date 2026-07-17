@@ -1,5 +1,5 @@
 import { GeneratorInterface2D, Bounds } from "./GeneratorInterface2D";
-import { ControlAwareInterface, makeInputControl, Control } from "../Controller";
+import { ControlAwareInterface, makeInputControl, makeSegmentedControl, Control } from "../Controller";
 import { distance } from "../Math";
 import { EventEmitter } from "../EventEmitter";
 import { NeverError } from "../Errors";
@@ -40,104 +40,122 @@ interface CircleState {
 	mode: CircleModes;
 	width: number;
 	height: number;
-	force: boolean;
+	ratioWidth: number;
+	ratioHeight: number;
 }
 
 export class Circle implements GeneratorInterface2D, ControlAwareInterface {
 
-	private circleModeControlElm = document.createElement('select');
+	private modeControl: Control<HTMLElement>;
 
 	public readonly changeEmitter = new EventEmitter<{ event: string, state: CircleState }>();
 
 	private widthControl: Control<HTMLInputElement>;
 	private heightControl: Control<HTMLInputElement>;
-	private forceCircleControl: Control<HTMLInputElement>;
+	private aspectRatioControl: Control<HTMLElement>;
 	private maxBlocksControl: Control<HTMLInputElement>;
 
 	constructor(
 		private width: number,
 		private height: number,
 		private mode : CircleModes,
-		private force : boolean,
+		private ratioWidth: number,
+		private ratioHeight: number,
 	) {
 
-		for (const item of Object.keys(CircleModes)) {
-			const opt = document.createElement('option');
-			opt.innerText = item;
-			this.circleModeControlElm.appendChild(opt);
-
-			if (item == this.mode) {
-				opt.selected = true;
-			}
-		}
-
-		this.circleModeControlElm.addEventListener('change', () => {
-			this.setMode(this.circleModeControlElm.value as CircleModes);
+		this.modeControl = makeSegmentedControl('Settings', 'Render', [
+			{ value: CircleModes.thick, text: 'THICK' },
+			{ value: CircleModes.thin, text: 'THIN' },
+			{ value: CircleModes.filled, text: 'FILL' },
+		], this.mode, (mode) => {
+			this.setMode(mode);
 
 			this.triggerChange('mode');
 		});
 
-		this.widthControl = makeInputControl('Shape', 'width', "number", this.width, () => {
-			if (this.force) {
-				this.heightControl.element.value = this.widthControl.element.value;
-				this.height = parseInt(this.widthControl.element.value, 10);
-			}
+		this.widthControl = makeInputControl('Settings', 'Width', "number", this.width, () => {
 			this.width = parseInt(this.widthControl.element.value, 10);
+			this.height = Math.round(this.width * this.ratioHeight / this.ratioWidth);
+			this.heightControl.element.value = `${this.height}`;
 
 			this.triggerChange('width');
 		});
 
-		this.heightControl = makeInputControl('Shape', 'height', "number", this.height, () => {
-			if (this.force) {
-				this.widthControl.element.value = this.heightControl.element.value;
-				this.width = parseInt(this.heightControl.element.value, 10);
-			}
+		this.heightControl = makeInputControl('Settings', 'Height', "number", this.height, () => {
 			this.height = parseInt(this.heightControl.element.value, 10);
+			this.width = Math.round(this.height * this.ratioWidth / this.ratioHeight);
+			this.widthControl.element.value = `${this.width}`;
 
 			this.triggerChange('height');
 		});
 
-		this.forceCircleControl = makeInputControl('Shape', 'Force Circle', "checkbox", "1", () => {
-			// this.heightControl.element.value = this.widthControl.element.value;
-			this.force = this.forceCircleControl.element.checked;
+		this.aspectRatioControl = this.makeAspectRatioControl();
 
-			// There's gotta be a cleaner way to do this, but this works for now avoiding recursive event calls
-			this.height = this.width;
-			this.heightControl.element.value = this.widthControl.element.value;
-
-			this.triggerChange('force')
-		});
-
-		this.forceCircleControl.element.checked = this.force;
-
-		this.maxBlocksControl = makeInputControl('Shape', 'max blocks', 'number', '', (val) => {
+		this.maxBlocksControl = makeInputControl('Settings', 'Max Block', 'number', '', (val) => {
 			const maxBlocks = parseInt(val, 10);
 			if (isNaN(maxBlocks) || maxBlocks < 1) return;
 
-			const size = Circle.findLargestForMaxBlocks(maxBlocks, this.mode);
-			if (size < 1) return;
+			const multiplier = Circle.findLargestForMaxBlocks(maxBlocks, this.mode, this.ratioWidth, this.ratioHeight);
+			if (multiplier < 1) return;
 
-			this.width = size;
-			this.height = size;
-			this.widthControl.element.value = `${size}`;
-			this.heightControl.element.value = `${size}`;
+			this.width = this.ratioWidth * multiplier;
+			this.height = this.ratioHeight * multiplier;
+			this.widthControl.element.value = `${this.width}`;
+			this.heightControl.element.value = `${this.height}`;
 
 			this.triggerChange('maxBlocks');
 		}, { min: '1' });
 	}
 
-	private static countBlocks(size: number, mode: CircleModes): number {
-		const radius = size / 2;
+	private makeAspectRatioControl(): Control<HTMLElement> {
+		const container = document.createElement('div');
+		container.className = 'aspect-ratio-control';
+
+		const ratioWidthInput = makeInputControl('Settings', null, 'number', this.ratioWidth, (val) => {
+			this.ratioWidth = Circle.clampRatio(parseInt(val, 10));
+			ratioWidthInput.element.value = `${this.ratioWidth}`;
+
+			this.height = Math.round(this.width * this.ratioHeight / this.ratioWidth);
+			this.heightControl.element.value = `${this.height}`;
+
+			this.triggerChange('ratio');
+		}, { min: '1', max: '30' });
+
+		const ratioHeightInput = makeInputControl('Settings', null, 'number', this.ratioHeight, (val) => {
+			this.ratioHeight = Circle.clampRatio(parseInt(val, 10));
+			ratioHeightInput.element.value = `${this.ratioHeight}`;
+
+			this.height = Math.round(this.width * this.ratioHeight / this.ratioWidth);
+			this.heightControl.element.value = `${this.height}`;
+
+			this.triggerChange('ratio');
+		}, { min: '1', max: '30' });
+
+		container.appendChild(ratioWidthInput.container ?? ratioWidthInput.element);
+		container.appendChild(ratioHeightInput.container ?? ratioHeightInput.element);
+
+		return { element: container, label: 'Aspect Ratio', group: 'Settings' };
+	}
+
+	private static clampRatio(value: number): number {
+		if (isNaN(value) || value < 1) return 1;
+		if (value > 30) return 30;
+		return value;
+	}
+
+	private static countBlocks(width: number, height: number, mode: CircleModes): number {
+		const radius = width / 2;
+		const ratio = width / height;
 		let count = 0;
-		for (let yi = 0; yi < size; yi++) {
-			for (let xi = 0; xi < size; xi++) {
-				const x = -.5 * (size - 2 * (xi + .5));
-				const y = -.5 * (size - 2 * (yi + .5));
+		for (let yi = 0; yi < height; yi++) {
+			for (let xi = 0; xi < width; xi++) {
+				const x = -.5 * (width - 2 * (xi + .5));
+				const y = -.5 * (height - 2 * (yi + .5));
 				let isFilled: boolean;
 				switch (mode) {
-					case CircleModes.thick:  isFilled = fatfilled(x, y, radius, 1); break;
-					case CircleModes.thin:   isFilled = thinfilled(x, y, radius, 1); break;
-					case CircleModes.filled: isFilled = filled(x, y, radius, 1); break;
+					case CircleModes.thick:  isFilled = fatfilled(x, y, radius, ratio); break;
+					case CircleModes.thin:   isFilled = thinfilled(x, y, radius, ratio); break;
+					case CircleModes.filled: isFilled = filled(x, y, radius, ratio); break;
 					default: throw new NeverError(mode);
 				}
 				if (isFilled) count++;
@@ -146,11 +164,12 @@ export class Circle implements GeneratorInterface2D, ControlAwareInterface {
 		return count;
 	}
 
-	private static findLargestForMaxBlocks(maxBlocks: number, mode: CircleModes): number {
-		let low = 1, high = 500, result = 0;
+	private static findLargestForMaxBlocks(maxBlocks: number, mode: CircleModes, ratioWidth: number, ratioHeight: number): number {
+		const maxDimension = 500;
+		let low = 1, high = Math.max(1, Math.floor(maxDimension / Math.max(ratioWidth, ratioHeight))), result = 0;
 		while (low <= high) {
 			const mid = Math.floor((low + high) / 2);
-			if (Circle.countBlocks(mid, mode) <= maxBlocks) {
+			if (Circle.countBlocks(ratioWidth * mid, ratioHeight * mid, mode) <= maxBlocks) {
 				result = mid;
 				low = mid + 1;
 			} else {
@@ -167,18 +186,19 @@ export class Circle implements GeneratorInterface2D, ControlAwareInterface {
 				mode: this.mode,
 				width: this.width,
 				height: this.height,
-				force: this.force,
+				ratioWidth: this.ratioWidth,
+				ratioHeight: this.ratioHeight,
 			}
 		});
 	}
 
 	public getControls(): Control[] {
 		return [
-			this.forceCircleControl,
 			this.maxBlocksControl,
+			this.aspectRatioControl,
 			this.widthControl,
 			this.heightControl,
-			{ element: this.circleModeControlElm, label: 'border', group: 'Render' },
+			this.modeControl,
 		];
 	}
 

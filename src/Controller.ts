@@ -14,6 +14,10 @@ export interface Control<T extends HTMLElement = HTMLElement> {
 	element: T;
 	label: string | null;
 	group: string;
+	// Element to insert into the DOM in place of `element`, when the control needs
+	// extra wrapping markup (e.g. stepper buttons) but callers still expect
+	// `element` to be the raw input for reading/writing `.value`.
+	container?: HTMLElement;
 }
 
 export interface ControlAwareInterface {
@@ -80,10 +84,89 @@ export function makeInputControl(
 	controlElm.addEventListener("keyup", handler);
 	controlElm.addEventListener("input", handler);
 
+	if (type === "number") {
+		// iOS Safari never renders the native up/down spinner on
+		// `<input type="number">`, so we supply our own stepper buttons.
+		const wrapper = document.createElement("div");
+		wrapper.className = "number-stepper";
+
+		const step = (dir: 1 | -1) => {
+			if (dir === 1) {
+				controlElm.stepUp();
+			} else {
+				controlElm.stepDown();
+			}
+			controlElm.dispatchEvent(new Event("input", { bubbles: true }));
+		};
+
+		const makeStepButton = (dir: 1 | -1, text: string, label: string) => {
+			const btn = document.createElement("button");
+			btn.type = "button";
+			btn.className = "stepper-btn";
+			btn.innerText = text;
+			btn.setAttribute("aria-label", label);
+			btn.addEventListener("click", (e) => {
+				e.preventDefault();
+				step(dir);
+			});
+			return btn;
+		};
+
+		wrapper.appendChild(makeStepButton(-1, "", "Decrease value"));
+		wrapper.appendChild(controlElm);
+		wrapper.appendChild(makeStepButton(1, "+", "Increase value"));
+
+		return {
+			label,
+			group,
+			element: controlElm,
+			container: wrapper,
+		};
+	}
+
 	return {
 		label,
 		group,
 		element: controlElm,
+	};
+}
+
+export function makeSegmentedControl<T extends string>(
+	group: string,
+	label: string | null,
+	options: { value: T, text: string }[],
+	value: T,
+	onChange: (val: T) => void
+): Control<HTMLElement> {
+	const container = document.createElement("div");
+	container.className = "segmented-control";
+
+	const buttons = options.map((opt) => {
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.className = "segment-btn";
+		btn.innerText = opt.text;
+		btn.addEventListener("click", () => {
+			if (value === opt.value) return;
+			value = opt.value;
+			setActive();
+			onChange(value);
+		});
+		container.appendChild(btn);
+		return btn;
+	});
+
+	const setActive = () => {
+		buttons.forEach((btn, i) => {
+			btn.classList.toggle("active", options[i].value === value);
+		});
+	};
+	setActive();
+
+	return {
+		element: container,
+		label,
+		group,
 	};
 }
 
@@ -110,7 +193,8 @@ export class MainController {
 			mode: CircleModes.thick,
 			width: 13,
 			height: 13,
-			force: true,
+			ratioWidth: 1,
+			ratioHeight: 1,
 		});
 
 		const w = circleState.get('width');
@@ -119,7 +203,8 @@ export class MainController {
 		const circle = new Circle(
 			w, h,
 			circleState.get('mode'),
-			circleState.get('force'),
+			circleState.get('ratioWidth'),
+			circleState.get('ratioHeight'),
 		);
 		this.generator = circle;
 		this.generator.changeEmitter.add(() => { this.render(); });
@@ -129,7 +214,8 @@ export class MainController {
 			circleState.set('mode', e.state.mode);
 			circleState.set('width', e.state.width);
 			circleState.set('height', e.state.height);
-			circleState.set('force', e.state.force);
+			circleState.set('ratioWidth', e.state.ratioWidth);
+			circleState.set('ratioHeight', e.state.ratioHeight);
 		});
 
 		if (w * h > 200 * 200) {
@@ -231,15 +317,17 @@ export class MainController {
 			}
 		}
 
-		for (const group in controlGroups) {
-			if (!controlGroups.hasOwnProperty(group)) {
-				continue;
-			}
+		const groupOrder = ['Settings', 'Details', 'Render'];
+		const groups = Object.keys(controlGroups).sort((a, b) => {
+			const ai = groupOrder.indexOf(a);
+			const bi = groupOrder.indexOf(b);
+			return (ai === -1 ? groupOrder.length : ai) - (bi === -1 ? groupOrder.length : bi);
+		});
 
+		for (const group of groups) {
 			const groupElm = document.createElement("fieldset");
-			const legend = document.createElement("legend");
-			legend.innerText = group;
-			groupElm.appendChild(legend);
+			groupElm.classList.add(`group-${group.toLowerCase()}`);
+			groupElm.setAttribute('aria-label', group);
 
 			for (const c of controlGroups[group]) {
 
@@ -250,7 +338,7 @@ export class MainController {
 					labelElm.innerText = c.label;
 				}
 
-				labelElm.appendChild(c.element);
+				labelElm.appendChild(c.container ?? c.element);
 			}
 
 			this.controls.appendChild(groupElm);

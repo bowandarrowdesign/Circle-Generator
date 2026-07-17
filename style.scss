@@ -1,3 +1,11 @@
+@font-face {
+	font-family: "Font Awesome 7 Free";
+	font-style: normal;
+	font-weight: 900;
+	font-display: block;
+	src: url("fonts/fa-solid-900.woff2") format("woff2");
+}
+
 * {
 	box-sizing: border-box;
 }
@@ -7,14 +15,14 @@ body {
 	font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
 
 	margin: 0;
-	padding: 48px;
+	padding: 24px;
 
 	display: grid;
-	grid-template-areas: "controls" "result";
-	grid-template-rows: min-content auto;
-	justify-items: center;
+	grid-template-areas: "controls result";
+	grid-template-columns: 282px 1fr;
+	column-gap: 30px;
+	align-items: start;
 
-	// width: 100vw;
 	height: 100vh;
 
 	> #controls {
@@ -24,47 +32,65 @@ body {
 		grid-area: result;
 		overflow: auto;
 		padding: .5em;
+		height: 100%;
+
+		display: flex;
+		align-items: flex-start;
+		justify-content: flex-start;
 	}
 
 }
 
 #controls {
 	display: flex;
-	flex-wrap: wrap;
-	justify-content: center;
+	flex-direction: column;
+	gap: 16px;
 
 	> fieldset {
-		border: 1px solid #aaa;
-		border-radius: 3px;
-		margin: 4px;
+		background: #f2f2f7;
+		border: 1px solid #000;
+		border-radius: 8px;
+		margin: 0;
+		padding: 24px 16px;
 
 		display: flex;
 		flex-direction: column;
+		gap: 16px;
 
 		align-self: stretch;
-
-		legend {
-			font-weight: bold;
-			font-size: 15px;
-		}
 
 		input[type="number"], input[type="checkbox"], select {
 			box-shadow: inset 0 0 0 2px rgb(204 204 204 / 50%);
 			outline: none;
 			border: 1px solid #ccc;
 			border-radius: 3px;
-			font-size: 1.2em;
+			// 16px minimum keeps iOS Safari from auto-zooming the page on focus.
+			font-size: 16px;
 			padding: 3px;
 		}
-	
+
+		// We supply our own +/- stepper buttons (iOS never shows the native
+		// ones), so suppress the browser's built-in number spinner everywhere
+		// to avoid two overlapping steppers.
+		input[type="number"] {
+			appearance: textfield;
+			-moz-appearance: textfield;
+
+			&::-webkit-outer-spin-button,
+			&::-webkit-inner-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
+			}
+		}
+
 		input[type="checkbox"] {
-			width: 20px;
-			height: 20px;
+			width: 24px;
+			height: 24px;
 			float: right;
 		}
-	
+
 		label {
-			> input[type="number"], input[type="range"], > select {
+			> input[type="range"], > select {
 				display: block;
 			}
 		}
@@ -72,6 +98,7 @@ body {
 		button {
 			margin: 1px 0;
 			width: 100%;
+			touch-action: manipulation;
 		}
 
 		output {
@@ -80,5 +107,116 @@ body {
 			font-style: italic;
 		}
 
+		.number-stepper {
+			display: flex;
+			align-items: stretch;
+			gap: 4px;
+
+			input[type="number"] {
+				flex: 1 1 auto;
+				min-width: 0;
+				width: 100%;
+				height: 32px;
+				text-align: center;
+				background: #fff;
+				border: 1px solid #e0e0e0;
+				border-radius: 4px;
+				font-size: 14px;
+				box-shadow: none;
+			}
+
+			.stepper-btn {
+				flex: none;
+				width: 32px;
+				height: 32px;
+				margin: 0;
+				padding: 0;
+				line-height: 1;
+				font-size: 16px;
+				font-family: "Font Awesome 7 Free";
+				font-weight: 900;
+				background: #fff;
+				border: 2px solid;
+				border-radius: 16px;
+
+				// Buttons are inserted as [decrement, input, increment].
+				&:first-child {
+					border-color: #ff8d28;
+					color: #ff8d28;
+				}
+
+				&:last-child {
+					border-color: #34c759;
+					color: #34c759;
+				}
+			}
+		}
+
+		.aspect-ratio-control {
+			display: flex;
+			width: 100%;
+			align-items: center;
+			gap: 16px;
+
+			.number-stepper {
+				flex: 1 1 0;
+				min-width: 0;
+			}
+		}
+
+		.segmented-control {
+			display: flex;
+			width: 100%;
+			gap: 4px;
+			padding: 4px;
+			background: #f2f2f7;
+			border: 1px solid #8e8e93;
+			border-radius: 8px;
+
+			.segment-btn {
+				flex: 1 1 0;
+				height: 24px;
+				margin: 0;
+				background: #fff;
+				border: 1px solid #e0e0e0;
+				border-radius: 4px;
+				color: #000;
+				font-size: 12px;
+
+				&.active {
+					background: rgb(120 120 120 / 20%);
+					border-color: #ccc;
+					color: #8e8e93;
+				}
+			}
+		}
+	}
+
+	.group-settings label {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 8px;
+		font-weight: bold;
+		font-size: 14px;
+	}
+
+	.group-details label {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		font-size: 18px;
+		padding: 4px 0;
+
+		&:not(:last-child) {
+			border-bottom: 1px solid #d9d9d9;
+		}
+
+		output {
+			float: none;
+			margin-left: 0;
+			font-style: normal;
+			font-weight: bold;
+		}
 	}
 }

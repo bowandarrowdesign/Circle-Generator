@@ -3,6 +3,8 @@
 /node_modules/
 /lib/
 /dist/
+/.claude/
+/circle-generator-dist.zip
 
 *.css
 *.css.map
